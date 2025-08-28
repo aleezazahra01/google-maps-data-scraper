@@ -7,7 +7,6 @@ pip install selenium
 ```bash
 pip install beautifulsoup
 ```
-`
 ```bash
 pip install pandas numpy
 ```
