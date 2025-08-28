@@ -1,68 +1,102 @@
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait 
-from selenium.common.exceptions import TimeoutException 
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
 import pandas as pd
-from playwright.sync_api import sync_playwright
-from dataclasses import dataclass,asdict,field
-import argparse
-import numpy as np
-import playwright as pw
+from dataclasses import dataclass, asdict, field
+import time
 
-@dataclass #contains data of each business
-#Provides more feature than a dictionary
+# user config
+search_config = {
+    "keyword": "karachi hotels",
+    "listings_to_scrape": 20  # change this number as needed
+}
+
+@dataclass
 class Business:
-    name:str=None
-    address:str=None
-    website:str=None
-    phone:str=None
+    name: str = None
+    reviews: str = None
+    address: str = None
+    website: str = None
+    phone: str = None
 
-@dataclass  #all instnance from prev class will be appende to this
+@dataclass
 class Businesslist:
-    business_list:list[Business]=field(default_factory=list)
-
+    business_list: list[Business] = field(default_factory=list)
+    
     def dataframe(self):
-        #json_normalize is used when api returns data in a nested structure and this functuon flattens that data to make it eaiser to work with ,it is easier to loa and use in a database
-        return pd.json_normalize([asdict(business)for business in self.business_list]),sep=""
-    def save_to_excel(self,filename):
-        self.dataframe().to_excel(f'{filename}.xlsx',index=False)
-    def save_to_csv(self,filename):
-        self.dataframe().to_csv(f'{filename}.csv',index=False)
+        return pd.json_normalize([asdict(business) for business in self.business_list])
+    
+    def save_to_excel(self, filename):
+        self.dataframe().to_excel(f'{filename}.xlsx', index=False)
+    
+    def save_to_csv(self, filename):
+        self.dataframe().to_csv(f'{filename}.csv', index=False)
 
 def main():
-    with sync_playwright() as p:
-        browser=p.chromium.launch(headless=False)
-        page=browser.new_page()
+    options = Options()
+    options.add_argument("--start-maximized")
+    driver = webdriver.Chrome(options=options)
+    wait = WebDriverWait(driver, 30)
 
-        page.goto('https://www.google.com/maps',timeout=60000)
-        page.wait_for_timeout(50000) #wait for five seconds 
+    driver.get("https://www.google.com/maps")
 
-        page.locator('input[@id="searchboxinput"]').fill(search_for)
-        page.wait_for_timeout(3000)  #sleep for 3 seconds
+    # search keyword
+    search_box = wait.until(EC.presence_of_element_located((By.ID, "searchboxinput")))
+    search_box.send_keys(search_config["keyword"])
+    search_box.send_keys(Keys.ENTER)
+    time.sleep(10)  # wait for results to load
 
-        page.keyboard.press('Enter')
-        page.wait_for_timeout(10000)  #wait for 10 seconds
+    # get listings
+    listings = driver.find_elements(By.XPATH, '//div[@role="article"]')
+    print(f"Found {len(listings)} listings")
 
-        listings=page.locator('//div[@role="article"]').all()
-        print(len(listings))
+    business_list = Businesslist()
 
+    for listing in listings[:search_config["listings_to_scrape"]]:
+        try:
+            listing.click()
+            time.sleep(5)
 
+            title_path = '//*[@id="QA0Szd"]/div/div/div[1]/div[2]/div/div[1]/div/div/div[2]/div/div[1]/div[1]/h1'
+            reviews_path = '//*[@id="QA0Szd"]/div/div/div[1]/div[2]/div/div[1]/div/div/div[2]/div/div[1]/div[2]/div/div/div[2]/span[1]/span[1]'
+            address_path = '//*[@id="QA0Szd"]/div/div/div[1]/div[2]/div/div[1]/div/div/div[11]/div[3]/button/div/div[2]/div[1]'
+            website_path = '//*[@id="QA0Szd"]/div/div/div[1]/div[2]/div/div[1]/div/div/div[11]/div[4]/a/div/div[2]/div[1]'
 
+            business = Business()
 
+            try:
+                business.name = wait.until(EC.presence_of_element_located((By.XPATH, title_path))).text
+            except:
+                business.name = None
 
-        browser.close()
+            try:
+                business.reviews = driver.find_element(By.XPATH, reviews_path).text
+            except:
+                business.reviews = None
 
-if __name__=="__main__":
-    parser=argparse.ArgumentParser()
-    parser.add_argument('-s','--search',type=str)
-    parser.add_argument('-l','--location',type=str)
-    args=parser.parse_args()
+            try:
+                business.address = driver.find_element(By.XPATH, address_path).text
+            except:
+                business.address = None
 
-    if args.location and args.search:
-        search_for=f'{args.search}--{args.location}'
-    else:
-        search_for='dentist new york'
-'''Created the main functions only it doesnt work right now just some basic args and declarations '''
+            try:
+                business.website = driver.find_element(By.XPATH, website_path).text
+            except:
+                business.website = None
+
+            business_list.business_list.append(business)
+
+        except Exception as e:
+            print(f"Error while scraping listing: {e}")
+            continue
+
+    business_list.save_to_excel("business_data")
+    business_list.save_to_csv("business_data")
+
+    driver.quit()
+
+if __name__ == "__main__":
+    main()
