@@ -1,9 +1,5 @@
 numpy==2.3.2
 pandas==2.3.2
-playwright==1.54.0
-pyee==13.0.0
-PySocks==1.7.1
 selenium==4.35.0
-trio==0.30.0
-trio-websocket==0.12.2
-typing_extensions==4.5.0
+
+
