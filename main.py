@@ -9,6 +9,8 @@ from dataclasses import dataclass, asdict, field
 import time
 
 # user config
+#customize this if needed
+
 search_config = {
     "keyword": "karachi hotels",
     "listings_to_scrape": 20  # change this number as needed
